@@ -1,0 +1,22 @@
+svg {
+  overflow: visible;
+  display: block;
+  width: 100%;
+}
+
+#root {
+  
+  height: 100vh;
+  padding: 0 50px 150px;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+button {
+  width: 100px;
+  border: 1px solid black;
+  margin: 0 auto 5px;
+}
+
+
+
