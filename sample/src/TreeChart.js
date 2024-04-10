@@ -1,12 +1,23 @@
+// TreeChart.tsx
 import React, { useRef, useEffect, useState } from "react";
-import { select, hierarchy, tree, linkHorizontal } from "d3";
-import useResizeObserver from "./useResizeObserver";
+import { select, hierarchy, tree } from "d3";
+import useResizeObserver from "./useResizeObserver.tsx";
 
-function TreeChart({ data }) {
-  const svgRef = useRef();
-  const wrapperRef = useRef();
+interface Node {
+  name: string;
+  children?: Node[];
+}
+
+interface TreeChartProps {
+  data: Node;
+}
+
+function TreeChart({ data }: TreeChartProps) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const dimensions = useResizeObserver(wrapperRef);
-  const [tooltipText, setTooltipText] = useState("");
+  const [tooltipText, setTooltipText] = useState<string>("");
+  const [tooltipStyle, setTooltipStyle] = useState<React.CSSProperties>({});
 
   useEffect(() => {
     const svg = select(svgRef.current);
@@ -15,12 +26,8 @@ function TreeChart({ data }) {
 
     const root = hierarchy(data);
 
-    const treeLayout = tree().size([900, dimensions.width]);
+    const treeLayout = tree<Node>().size([dimensions.height, dimensions.width]);
     treeLayout(root);
-
-    const linkGenerator = linkHorizontal()
-      .x((d) => d.y + 165)
-      .y((d) => d.x);
 
     // Define an arrowhead marker
     svg
@@ -43,7 +50,7 @@ function TreeChart({ data }) {
       .data(root.descendants())
       .join("g")
       .attr("class", "node")
-      .attr("transform", (d) => `translate(${d.y},${d.x - 27})`);
+      .attr("transform", (d: any) => `translate(${d.y},${d.x})`);
 
     const rect = nodes
       .append("rect")
@@ -61,23 +68,48 @@ function TreeChart({ data }) {
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle")
       .text((d) =>
-        d.data.name.length > 12
-          ? d.data.name.substring(0, 12) + "..."
+        d.data.name.length > 15
+          ? d.data.name.substring(0, 15) + "..."
           : d.data.name
       ); // Display node name
 
-    rect.on("mouseover", function (event, d) {
-      const textWidth = this.parentNode.querySelector("text");
-      console.log(textWidth.innerHTML);
-
-      if (textWidth.getBBox().width > 170) {
+    rect.on("mouseover", function (event, d: any) {
+      if (d.data.name.length > 15) {
         setTooltipText(d.data.name);
+        const tooltipTop = d.x - 27;
+        const tooltipLeft = d.y;
+        setTooltipStyle({
+          top: `${tooltipTop}px`,
+          left: `${tooltipLeft}px`,
+        });
       }
     });
 
     rect.on("mouseout", function () {
       setTooltipText("");
     });
+
+    // Define the link generator function
+    const linkGenerator = (d: any) => {
+      const sourceX = d.source.x + 27;
+      const sourceY = d.source.y + 200; // Adjust the source node position
+      const targetX = d.target.x + 27;
+      const targetY = d.target.y;
+
+      return `
+        M${sourceY},${sourceX}
+        C${(sourceY + targetY) / 2},${sourceX},
+         ${(sourceY + targetY) / 2},${targetX},
+         ${targetY},${targetX}
+      `;
+    };
+
+    const linkGenerator2 = (d: any) => {
+      return `
+        M${d.source.y + 170},${d.source.x + 27} 
+        L${d.source.y + 200},${d.source.x + 27}
+      `;
+    };
     // Draw links between nodes
     svg
       .selectAll(".link")
@@ -86,29 +118,77 @@ function TreeChart({ data }) {
       .attr("class", "link")
       .attr("fill", "none")
       .attr("stroke", "#00D9A7") // Set link color
-      .attr("stroke-dasharray", "0 10 10")
+      .attr("stroke-dasharray", "10 10 10")
       .attr("marker-end", "url(#arrowhead)") // Add arrowhead to the end of the link
       .attr("d", linkGenerator);
-  }, [data, dimensions, tooltipText]);
+
+    svg
+      .selectAll(".link2")
+      .data(root.links())
+      .join("path")
+      .attr("class", "link2")
+      .attr("fill", "none")
+      .attr("stroke", "#00D9A7") // Set link color
+      .attr("stroke-dasharray", "10 10 10")
+      .attr("d", linkGenerator2);
+  }, [data, dimensions, tooltipText, tooltipStyle]);
+
+  useEffect(() => {
+    if (!data || !wrapperRef.current) return;
+
+    const calculateMaxNodesPerLevel = (node: Node): number[] => {
+      const maxNodes: number[] = [];
+
+      const traverse = (node: Node, level: number) => {
+        if (!maxNodes[level]) {
+          maxNodes[level] = 0;
+        }
+
+        maxNodes[level]++;
+
+        if (node.children) {
+          node.children.forEach((child) => traverse(child, level + 1));
+        }
+      };
+
+      traverse(node, 0);
+      return maxNodes;
+    };
+
+    const maxNodesPerLevel = calculateMaxNodesPerLevel(data);
+    console.log(Math.max(...maxNodesPerLevel));
+    const maxHeight = Math.max(...maxNodesPerLevel) * 225; // Height of each node is assumed to be 54 pixels
+
+    wrapperRef.current.style.height = `${maxHeight}px`;
+  }, [data]);
 
   return (
     <div
+      className="box1"
       ref={wrapperRef}
-      style={{ marginBottom: "2rem", position: "relative" }}
+      style={{ marginBottom: "2rem", position: "relative", width: "1300px" }}
     >
-      <svg ref={svgRef}></svg>
+      <svg
+        style={{
+          height: "100%",
+          width: "1700px",
+          overflowX: "scroll",
+          border: "1px solid black",
+          marginLeft: "10px",
+          paddingLeft: "10px",
+        }}
+        ref={svgRef}
+      ></svg>
       {tooltipText && (
         <div
           style={{
             position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
             backgroundColor: "rgba(255, 255, 255, 0.8)",
             padding: "0.5rem",
             borderRadius: "4px",
             boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
             zIndex: 9999,
+            ...tooltipStyle,
           }}
         >
           {tooltipText}
